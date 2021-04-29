@@ -1,0 +1,219 @@
+---
+title: "Untitled"
+output: html_document
+---
+Виктория в своём отчёте отчётливо установила проблему большого количества данных. Нужно посэмплить! Stratified sampling, как известно, создаёт меньшую дисперсию при том же N, а среднее значение при использовании этого метода ближе к значению в популяции. Stratified значит, что все случаи делятся на страты, из которых выбирается одинаковое количество данных. Это важно также и для модели, которую вредно обучать на выборке, в которой один из классов данных представлен неравномерно. Какими будут эти страты? В отчёте Виктория указывает на arrival_date_month, так же важно учесть количество взрослых, детей и машин, но group_by для них не подходит(количество взрослых от 1 до 55...), так что я кластеризую. 
+```{r setup, include=FALSE}
+library(tidyverse)
+library(ReinforcementLearning)
+library(cluster)
+library(purrr)
+library(sampling)
+library(caret)
+#setwd("/Users/anatolijkekarev/Documents/R wd")
+data = read.csv("hotel_bookings.csv")
+#write.csv(data1, "datacl.csv")
+data1 = read.csv("datacl.csv")
+#library(dplyr, warn.conflicts = FALSE)
+
+# Suppress summarise info
+#options(dplyr.summarise.inform = FALSE)
+
+```
+Вот сэмплинг: логика таккая: раз мы будем считать цену по месяцам, то пусть в месяцах данных будет (примерно) по ровну. Предсказывать мы будем adr, значит его распределение надо взять под контроль, но adr сильно зависит от количества гостей разных возрастных категорий (переменные adults, children, babies). Значит кластерить + сэмплить надо с учётом пропорции гостей разного возраста.
+```{r}
+
+
+datam = data1 %>% group_by(arrival_date_month)%>% sample_n(4000)
+
+
+# matrix of balancing variables
+X=cbind(datam$adults,datam$children,datam$babies)
+# selection of 3 clusters
+s=balancedcluster(X,7, datam$adr ,1,TRUE)
+
+# the selected clusters
+unique(cluster[s[,1]==1])
+
+s = s %>% as.data.frame()
+colnames(s) = c("selected","prob")
+datam1 = cbind(datam, s)
+
+datam = filter(datam1, selected == "1")
+datam = datam%>%select(-selected,-prob)
+#write.csv(datam, "datasamplepropper.csv")
+
+
+
+
+```
+
+RL
+Идея такая:соединить  опросник с оценкой качества модели в само приложение и учить его подбирать параметры для модели.
+
+
+  Several parameters can be provided to in order to customize the learning behavior of the agent.
+
+  alpha The learning rate, set between 0 and 1. Setting it to 0 means that the Q-values are never updated and, hence, nothing is learned. Setting a high value, such as 0.9, means that learning can occur quickly.
+  gamma Discount factor, set between 0 and 1. Determines the importance of future rewards. A factor of 0 will render the agent short-sighted by only considering current rewards, while a factor approaching 1 will cause it to strive for a greater reward over the long run.
+  epsilon Exploration parameter, set between 0 and 1. Defines the exploration mechanism in ε-greedy action selection. In this strategy, the agent explores the environment by selecting an action at random with probability ε. Alternatively, the agent exploits its current knowledge by choosing the optimal action with probability 1−ε. This parameter is only required for sampling new experience based on an existing policy.
+  iter Number of repeated learning iterations the agent passes through the training dataset. Iter is an integer greater than 0. The default is set to 1 in which each state transition tuple is presented to the agent only once. Depending on the size of the training data, a higher number of repeated learning iterations can improve convergence but requires longer computation time. This parameter is passed directly to ReinforcementLearning().
+
+```{r}
+  
+states <- c("s1")
+actions <- c("acb", "ac", "ab", "cb","a","b","c")
+ # env = function (state, action) 
+ # {
+ #    ifelse( eval = -1,
+ #         reward <- 1
+ #         reward <- 1
+ #     out <- list(NextState = "s1", Reward = reward)
+ #     return(out)
+ # }
+
+
+colnames (lrn.sam) = c("State","Action","NextState","Reward")
+a = rep("s1",10) 
+State = a
+Action = as.character(sample(actions,10, replace = T))
+NextState = a
+Reward = as.numeric(sample(c(1,-1),10, replace = T))
+lrn.sam = cbind(State,Action,NextState,Reward)%>% as.data.frame()  
+lrn.sam['Reward'] = as.numeric(lrn.sam$Reward) 
+  
+  
+  
+  
+ 
+
+tictactoe = tictactoe %>% sample_frac(0.001)
+summary(lrn.sam)
+# Perform reinforcement learning
+control <- list(alpha = 0.1, gamma = 0.1, epsilon = 0.1)
+model <- ReinforcementLearning(data = lrn.sam, 
+                               s = "State", 
+                               a = "Action", 
+                               r = "Reward", 
+                               s_new = "NextState", 
+                               iter = 10, control = control)
+  
+
+action = computePolicy(model)
+
+if (action == "acb"){
+formula = 0}
+if (action =="ac"){
+formula = 0}
+if (action =="ab"){
+formula = 0}
+if (action =="cb"){
+formula = 0}
+if (action =="a"){
+formula = 0}
+if (action =="b"){
+formula = 0}
+if (action =="c"){
+formula = 0}
+
+
+  
+
+
+
+```
+
+
+Model
+# модель должна предсказывть отказ и даты с наименьшими ценами по месяцу
+Сейчас же она представляет для месяца график с ключевыми показателями, на которые будет интересно посмотреть клиенту
+```{r}
+datApr = datam %>% filter(arrival_date_month == "April")
+
+
+
+#loop будет включать порядковый номер переменной
+ncoldata = ncol(datApr)
+for (i in 1:31){
+  
+  datApr[ncoldata + i] <- ifelse (i >= datApr$arrival_date_day_of_month & i<=      datApr$arrival_date_day_of_month + datApr$stays_in_week_nights,T,F)
+}
+datApr = datApr %>% ungroup()
+# теперь для каждого дня посчитаем средний adr для этого 
+adr.by.d.vec = c()
+canc.by.d.vec = c()
+perc.tourists = c()
+means = data_frame()
+for (i in 1:31){
+  kek = datApr %>% filter(datApr[ncoldata+i] == TRUE) #%>% mean (datApr$adr)
+  canc.by.d.vec[i] = mean(kek$is_canceled)
+  adr.by.d.vec [i] = mean (kek$adr)
+  perc.tourists [i] = nrow(kek)/nrow(datApr) #туристическая загрузка процент от всех кто побывал там в апреле был там в этот день
+}
+means = cbind(canc.by.d.vec,adr.by.d.vec,perc.tourists) %>% as.data.frame()
+means[is.na(means)] <- 0
+means["day"]=1:31
+
+
+
+
+```
+это просто пробная модель лог регресси для предсказания отказа
+```{r}
+
+a = glm(is_canceled ~ hotel + arrival_date_month + adults + children + babies , data = datam)
+Preds <- predict(a, type = 'response')
+summary(a)
+ #auc(students$sex, Preds)
+
+#set.seed(19623)
+#predTrain.tree = predict(airct, data,trainControl(sampling = "smote") )
+```
+
+```{r}
+ggplot(means)+geom_histogram(aes(x = as.numeric(day), y = adr.by.d.vec), bins = 31, stat = 'identity')+
+  geom_line(aes(x = day, y = perc.tourists* 1000, color = 'red'))+
+  geom_jitter(aes(x = day, y = canc.by.d.vec*150, color = 'green'))+
+  labs(x = "Days in month", y = "level")
+
+```
+A теперь всё то же самое но в функцию
+```{r}
+
+month.to.graph = function(month){
+
+datMon = datam %>% filter(arrival_date_month == month)
+#loop будет включать порядковый номер переменной
+ncoldata = ncol(datMon)
+for (i in 1:31){
+  
+  datMon[ncoldata + i] <- ifelse (i >= datMon$arrival_date_day_of_month & i<=      datMon$arrival_date_day_of_month + datMon$stays_in_week_nights,T,F)
+}
+#datApr = datApr %>% ungroup()
+# теперь для каждого дня посчитаем средний adr для этого 
+adr.by.d.vec = c()
+canc.by.d.vec = c()
+perc.tourists = c()
+means = data_frame()
+for (i in 1:31){
+  kek = datMon %>% filter(datMon[ncoldata+i] == TRUE) #%>% mean (datApr$adr)
+  canc.by.d.vec[i] = mean(kek$is_canceled)
+  adr.by.d.vec [i] = mean (kek$adr)
+  perc.tourists [i] = nrow(kek)/nrow(datApr) #туристическая загрузка процент от всех кто побывал там в апреле был там в этот день
+}
+means = cbind(canc.by.d.vec,adr.by.d.vec,perc.tourists) %>% as.data.frame()
+means[is.na(means)] <- 0
+means["day"]=1:31
+
+
+ggplot(means)+geom_histogram(aes(x = as.numeric(day), y = adr.by.d.vec), bins = 31, stat = 'identity')+
+  geom_line(aes(x = day, y = perc.tourists* 1000, color = 'red'))+
+  geom_jitter(aes(x = day, y = canc.by.d.vec*150, color = 'green'))+
+  labs(x = "Days in month", y = "level")
+}
+#работает, но писать название месяца нужно в кавычках. Потом могу поправить
+month.to.graph("June")
+
+```
+
+
